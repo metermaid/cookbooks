@@ -77,9 +77,8 @@
         const gid = '452204776';
         const googleSheetURL = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 
-        let recipeTitles = []; // Store only the titles
-        const recipeCardCache = new Map(); // Cache for HTML strings
-        const recipeSearchCache = new Map(); // Cache for searchable text
+        const recipeCardCache = new Map(); // Cache for HTML strings, keyed by searchable string
+        let searchableRecipes = []; // Array of all searchable text strings
 
         /**
          * Fetches and processes recipe data.
@@ -91,11 +90,11 @@
                 const csvText = await response.text();
                 const parsedRecipes = parseCSV(csvText);
                 
-                // Store only the titles, and build caches from the full data
-                recipeTitles = parsedRecipes.map(r => r.Title).filter(Boolean);
-                buildRecipeCaches(parsedRecipes); // Build caches using the temporary full data
+                // Build caches from the full data
+                buildRecipeCaches(parsedRecipes);
                 
-                displayResults(recipeTitles);   // Display initial results using titles
+                // Display initial results using the array of searchable strings
+                displayResults(searchableRecipes);
             } catch (error) {
                 console.error('Error fetching recipes:', error);
                 resultsContainer.innerHTML = '<p class="text-center text-red-500">Could not load recipe data.</p>';
@@ -112,11 +111,11 @@
             allRecipes.forEach(recipe => {
                 if (!recipe.Title) return; // Skip empty rows
 
-                // --- Build Searchable Text Cache ---
+                // Create the single searchable string for the recipe
                 const searchIn = Object.values(recipe).join(' ').toLowerCase();
-                recipeSearchCache.set(recipe.Title, searchIn);
+                searchableRecipes.push(searchIn);
 
-                // --- Build HTML Card Cache ---
+                // --- Build HTML Card Cache using searchIn as key ---
                 const escapeQuote = (str) => str.replace(/'/g, "\\'");
 
                 const categoriesHTML = recipe.Categories ? recipe.Categories.split(',')
@@ -149,7 +148,7 @@
                         </div>
                     </div>
                 `;
-                recipeCardCache.set(recipe.Title, cardHTML);
+                recipeCardCache.set(searchIn, cardHTML);
             });
         }
         
@@ -184,16 +183,16 @@
 
         /**
          * Renders recipe results by pulling HTML from the cache.
-         * @param {Array<string>} resultsTitles The array of recipe titles to display.
+         * @param {Array<string>} resultsSearchStrings The array of searchable recipe strings to display.
          */
-        function displayResults(resultsTitles) {
-            if (resultsTitles.length > 0) {
-                const resultsHTML = resultsTitles
-                    .map(title => recipeCardCache.get(title))
+        function displayResults(resultsSearchStrings) {
+            if (resultsSearchStrings.length > 0) {
+                const resultsHTML = resultsSearchStrings
+                    .map(searchString => recipeCardCache.get(searchString))
                     .join('');
 
                 resultsContainer.innerHTML = resultsHTML;
-                resultsCount.textContent = `Showing ${resultsTitles.length} recipe(s).`;
+                resultsCount.textContent = `Showing ${resultsSearchStrings.length} recipe(s).`;
                 noResultsMessage.classList.add('hidden');
             } else {
                 resultsContainer.innerHTML = '';
@@ -212,19 +211,20 @@
         }
 
         /**
-         * Handles the search logic using the search cache.
+         * Handles the search logic by filtering the searchable strings array.
          */
         function handleSearch() {
             const query = searchInput.value.toLowerCase().trim();
+
             if (query === "") {
-                displayResults(recipeTitles);
+                displayResults(searchableRecipes);
                 return;
             }
-            const filteredTitles = recipeTitles.filter(title => {
-                const searchIn = recipeSearchCache.get(title) || '';
-                return searchIn.includes(query);
+            
+            const filteredSearchStrings = searchableRecipes.filter(searchString => {
+                return searchString.includes(query);
             });
-            displayResults(filteredTitles);
+            displayResults(filteredSearchStrings);
         }
 
         // Event listeners
