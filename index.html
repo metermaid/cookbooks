@@ -43,7 +43,7 @@
 
         <!-- Search Input -->
         <div class="mb-8 flex items-center gap-2">
-            <input type="text" id="searchInput" placeholder="Search by title, author, category, or ingredient..." class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+            <input type="text" id="searchInput" placeholder="Search by title, category, or ingredient..." class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
             <button id="searchButton" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Search</button>
         </div>
 
@@ -172,7 +172,6 @@
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 mb-2">${recipe.Title}</h2>
                             <div class="text-sm text-gray-600 mb-4 pb-4 border-b border-gray-200">
-                                ${recipe.Author ? `by <strong class="font-medium text-gray-800">${recipe.Author}</strong>` : ''}
                                 ${recipe.Book ? ` in <em class="text-gray-800">${recipe.Book}</em> (Page ${recipe.Page || 'N/A'})` : ''}
                             </div>
                             <div class="mb-4">
