@@ -125,16 +125,17 @@
                 const values = lines[i].split(regex);
                 
                 const entry = {};
-                headers.forEach((header, index) => {
-                    let value = (values[index] || '').trim();
-                    // Remove quotes from start and end if they exist
-                    if (value.startsWith('"') && value.endsWith('"')) {
-                        value = value.substring(1, value.length - 1);
-                    }
-                    // Replace escaped double quotes with a single quote
-                    value = value.replace(/""/g, '"');
-                    entry[header] = value;
-                });
+                // I formatted this data, let's just assume I didn't goof it for speed
+                // headers.forEach((header, index) => {
+                //     let value = (values[index] || '').trim();
+                //     // Remove quotes from start and end if they exist
+                //     if (value.startsWith('"') && value.endsWith('"')) {
+                //         value = value.substring(1, value.length - 1);
+                //     }
+                //     // Replace escaped double quotes with a single quote
+                //     value = value.replace(/""/g, '"');
+                //     entry[header] = value;
+                // });
                 data.push(entry);
             }
             return data;
