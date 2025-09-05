@@ -43,7 +43,7 @@
 
         <!-- Search Input -->
         <div class="mb-8 flex items-center gap-2">
-            <input type="text" id="searchInput" placeholder="Search by title, author, category, or ingredient..." class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+            <input type="text" id="searchInput" placeholder="Search by title, book, category, or ingredient..." class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
             <button id="searchButton" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Search</button>
         </div>
 
@@ -77,8 +77,9 @@
         const gid = '452204776';
         const googleSheetURL = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 
-        let recipes = [];
-        const recipeCardCache = new Map(); // New cache to store HTML strings
+        let recipeTitles = []; // Store only the titles
+        const recipeCardCache = new Map(); // Cache for HTML strings
+        const recipeSearchCache = new Map(); // Cache for searchable text
 
         /**
          * Fetches and processes recipe data.
@@ -88,9 +89,13 @@
                 const response = await fetch(googleSheetURL);
                 if (!response.ok) throw new Error('Network response was not ok');
                 const csvText = await response.text();
-                recipes = parseCSV(csvText);
-                buildRecipeCache(recipes); // 1. Build the cache after fetching
-                displayResults(recipes);   // 2. Display initial results
+                const parsedRecipes = parseCSV(csvText);
+                
+                // Store only the titles, and build caches from the full data
+                recipeTitles = parsedRecipes.map(r => r.Title).filter(Boolean);
+                buildRecipeCaches(parsedRecipes); // Build caches using the temporary full data
+                
+                displayResults(recipeTitles);   // Display initial results using titles
             } catch (error) {
                 console.error('Error fetching recipes:', error);
                 resultsContainer.innerHTML = '<p class="text-center text-red-500">Could not load recipe data.</p>';
@@ -100,13 +105,18 @@
         }
 
         /**
-         * Generates HTML for all recipe cards and stores them in the cache.
+         * Generates HTML and searchable text for all recipes and stores them in caches.
          * @param {Array<Object>} allRecipes The array of all recipe objects.
          */
-        function buildRecipeCache(allRecipes) {
+        function buildRecipeCaches(allRecipes) {
             allRecipes.forEach(recipe => {
                 if (!recipe.Title) return; // Skip empty rows
 
+                // --- Build Searchable Text Cache ---
+                const searchIn = Object.values(recipe).join(' ').toLowerCase();
+                recipeSearchCache.set(recipe.Title, searchIn);
+
+                // --- Build HTML Card Cache ---
                 const escapeQuote = (str) => str.replace(/'/g, "\\'");
 
                 const categoriesHTML = recipe.Categories ? recipe.Categories.split(',')
@@ -122,7 +132,7 @@
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 mb-2">${recipe.Title}</h2>
                             <div class="text-sm text-gray-600 mb-4 pb-4 border-b border-gray-200">
-                                ${recipe.Book ? ` in <em class="text-gray-800">${recipe.Book}</em> (Page ${recipe.Page || 'N/A'})` : ''}
+                                ${recipe.Book ? `in <em class="text-gray-800">${recipe.Book}</em> (Page ${recipe.Page || 'N/A'})` : ''}
                             </div>
                             <div class="mb-4">
                                 <strong class="font-medium text-gray-900 block mb-2">Categories:</strong>
@@ -139,7 +149,6 @@
                         </div>
                     </div>
                 `;
-                // Use recipe Title as the key to store its HTML
                 recipeCardCache.set(recipe.Title, cardHTML);
             });
         }
@@ -149,39 +158,45 @@
          */
         function parseCSV(text) {
             const lines = text.trim().split(/\r?\n/);
-            const headers = lines[0].split(',').map(header => header.trim().replace(/"/g, ''));
-            headers[0] = headers[0].replace(/^\uFEFF/, '');
+            const allHeaders = lines[0].split(',').map(header => header.trim().replace(/"/g, ''));
+            allHeaders[0] = allHeaders[0].replace(/^\uFEFF/, '');
+            const headers = allHeaders.filter(h => h !== 'Author');
+            
             const data = [];
             const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i]) continue;
                 const values = lines[i].split(regex);
                 const entry = {};
-                headers.forEach((header, index) => {
-                    let value = (values[index] || '').trim().replace(/^"|"$/g, '').replace(/""/g, '"');
-                    entry[header] = value;
+                allHeaders.forEach((header, index) => {
+                    if(headers.includes(header)){
+                        let value = (values[index] || '').trim().replace(/^"|"$/g, '').replace(/""/g, '"');
+                        entry[header] = value;
+                    }
                 });
-                data.push(entry);
+                if (Object.keys(entry).length > 0 && entry.Title) {
+                   data.push(entry);
+                }
             }
             return data;
         }
 
         /**
          * Renders recipe results by pulling HTML from the cache.
-         * @param {Array<Object>} results The array of recipes to display.
+         * @param {Array<string>} resultsTitles The array of recipe titles to display.
          */
-        function displayResults(results) {
-            if (results.length > 0) {
-                // Map the results to their cached HTML strings and join them
-                const resultsHTML = results
-                    .map(recipe => recipeCardCache.get(recipe.Title))
+        function displayResults(resultsTitles) {
+            if (resultsTitles.length > 0) {
+                const resultsHTML = resultsTitles
+                    .map(title => recipeCardCache.get(title))
                     .join('');
 
-                resultsContainer.innerHTML = resultsHTML; // Single DOM update
-                resultsCount.textContent = `Showing ${results.length} recipe(s).`;
+                resultsContainer.innerHTML = resultsHTML;
+                resultsCount.textContent = `Showing ${resultsTitles.length} recipe(s).`;
                 noResultsMessage.classList.add('hidden');
             } else {
-                resultsContainer.innerHTML = ''; // Clear previous results
+                resultsContainer.innerHTML = '';
                 resultsCount.textContent = 'Showing 0 recipes.';
                 noResultsMessage.classList.remove('hidden');
             }
@@ -197,19 +212,19 @@
         }
 
         /**
-         * Handles the search logic.
+         * Handles the search logic using the search cache.
          */
         function handleSearch() {
             const query = searchInput.value.toLowerCase().trim();
             if (query === "") {
-                displayResults(recipes);
+                displayResults(recipeTitles);
                 return;
             }
-            const filteredRecipes = recipes.filter(recipe => {
-                const searchIn = Object.values(recipe).join(' ').toLowerCase();
+            const filteredTitles = recipeTitles.filter(title => {
+                const searchIn = recipeSearchCache.get(title) || '';
                 return searchIn.includes(query);
             });
-            displayResults(filteredRecipes);
+            displayResults(filteredTitles);
         }
 
         // Event listeners
