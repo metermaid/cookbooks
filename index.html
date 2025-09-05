@@ -43,7 +43,7 @@
 
         <!-- Search Input -->
         <div class="mb-8 flex items-center gap-2">
-            <input type="text" id="searchInput" placeholder="Search by title, category, or ingredient..." class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+            <input type="text" id="searchInput" placeholder="Search by title, author, category, or ingredient..." class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
             <button id="searchButton" class="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Search</button>
         </div>
 
@@ -73,103 +73,52 @@
         const loadingIndicator = document.getElementById('loading');
         const noResultsMessage = document.getElementById('noResults');
 
-        // The URL to your Google Sheet exported as CSV
         const sheetId = '1F-ffWA3lrISpJaCIPVnMB8y5QMObh3A79VoWGS3FEV0';
         const gid = '452204776';
         const googleSheetURL = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 
         let recipes = [];
+        const recipeCardCache = new Map(); // New cache to store HTML strings
 
         /**
-         * Fetches and parses recipe data from the Google Sheet.
+         * Fetches and processes recipe data.
          */
         async function fetchRecipes() {
             try {
                 const response = await fetch(googleSheetURL);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 const csvText = await response.text();
                 recipes = parseCSV(csvText);
-                displayResults(recipes); // Display all recipes initially
+                buildRecipeCache(recipes); // 1. Build the cache after fetching
+                displayResults(recipes);   // 2. Display initial results
             } catch (error) {
                 console.error('Error fetching recipes:', error);
-                resultsContainer.innerHTML = '<p class="text-center text-red-500">Could not load recipe data. Please check the spreadsheet link or your connection.</p>';
+                resultsContainer.innerHTML = '<p class="text-center text-red-500">Could not load recipe data.</p>';
             } finally {
                 loadingIndicator.style.display = 'none';
             }
         }
-        
-        /**
-         * Parses a CSV string into an array of objects.
-         * This parser correctly handles commas within quoted fields and removes the BOM character.
-         * @param {string} text The CSV text to parse.
-         * @returns {Array<Object>} An array of recipe objects.
-         */
-        function parseCSV(text) {
-            // Trim whitespace and split into lines
-            const lines = text.trim().split(/\r?\n/);
-            
-            // Handle spreadsheet column names, removing quotes and BOM character
-            const headers = lines[0].split(',').map(header => header.trim().replace(/"/g, ''));
-            headers[0] = headers[0].replace(/^\uFEFF/, ''); // Remove BOM
-            
-            const data = [];
-
-            // Regex to split on commas that are not inside quotes
-            const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-
-            for (let i = 1; i < lines.length; i++) {
-                if (!lines[i]) continue;
-                // Split the line using the regex
-                const values = lines[i].split(regex);
-                
-                const entry = {};
-                // I formatted this data, let's just assume I didn't goof it for speed
-                // headers.forEach((header, index) => {
-                //     let value = (values[index] || '').trim();
-                //     // Remove quotes from start and end if they exist
-                //     if (value.startsWith('"') && value.endsWith('"')) {
-                //         value = value.substring(1, value.length - 1);
-                //     }
-                //     // Replace escaped double quotes with a single quote
-                //     value = value.replace(/""/g, '"');
-                //     entry[header] = value;
-                // });
-                data.push(entry);
-            }
-            return data;
-        }
 
         /**
-         * Renders the recipe results in the container.
-         * @param {Array<Object>} results The array of recipes to display.
+         * Generates HTML for all recipe cards and stores them in the cache.
+         * @param {Array<Object>} allRecipes The array of all recipe objects.
          */
-        function displayResults(results) {
-            resultsContainer.innerHTML = '';
-            
-            if (results.length > 0) {
-                resultsCount.textContent = `Showing ${results.length} recipe(s).`;
-                noResultsMessage.classList.add('hidden');
-                results.forEach(recipe => {
-                    if (!recipe.Title) return; // Skip empty rows
-                    const card = document.createElement('div');
-                    card.className = 'recipe-card bg-white p-6 rounded-lg shadow-md border border-gray-200';
-                    
-                    // Helper to escape single quotes for the onclick attribute
-                    const escapeQuote = (str) => str.replace(/'/g, "\\'");
+        function buildRecipeCache(allRecipes) {
+            allRecipes.forEach(recipe => {
+                if (!recipe.Title) return; // Skip empty rows
 
-                    // Create category buttons
-                    const categoriesHTML = recipe.Categories ? recipe.Categories.split(',')
-                        .map(cat => `<button onclick="searchByTerm('${escapeQuote(cat.trim())}')" class="bg-blue-100 text-blue-800 text-xs font-semibold mr-2 mb-2 px-2.5 py-1.5 rounded-full hover:bg-blue-200 transition-colors duration-200">${cat.trim()}</button>`)
-                        .join('') : '<span class="text-sm text-gray-500">None</span>';
+                const escapeQuote = (str) => str.replace(/'/g, "\\'");
 
-                    // Create ingredient buttons
-                    const ingredientsHTML = recipe.Ingredients ? recipe.Ingredients.split(',')
-                        .map(ing => `<button onclick="searchByTerm('${escapeQuote(ing.trim())}')" class="bg-green-100 text-green-800 text-xs font-semibold mr-2 mb-2 px-2.5 py-1.5 rounded-full hover:bg-green-200 transition-colors duration-200">${ing.trim()}</button>`)
-                        .join('') : '<span class="text-sm text-gray-500">Not listed</span>';
+                const categoriesHTML = recipe.Categories ? recipe.Categories.split(',')
+                    .map(cat => `<button onclick="searchByTerm('${escapeQuote(cat.trim())}')" class="bg-blue-100 text-blue-800 text-xs font-semibold mr-2 mb-2 px-2.5 py-1.5 rounded-full hover:bg-blue-200 transition-colors duration-200">${cat.trim()}</button>`)
+                    .join('') : '<span class="text-sm text-gray-500">None</span>';
 
-                    card.innerHTML = `
+                const ingredientsHTML = recipe.Ingredients ? recipe.Ingredients.split(',')
+                    .map(ing => `<button onclick="searchByTerm('${escapeQuote(ing.trim())}')" class="bg-green-100 text-green-800 text-xs font-semibold mr-2 mb-2 px-2.5 py-1.5 rounded-full hover:bg-green-200 transition-colors duration-200">${ing.trim()}</button>`)
+                    .join('') : '<span class="text-sm text-gray-500">Not listed</span>';
+
+                const cardHTML = `
+                    <div class="recipe-card bg-white p-6 rounded-lg shadow-md border border-gray-200">
                         <div>
                             <h2 class="text-2xl font-bold text-gray-800 mb-2">${recipe.Title}</h2>
                             <div class="text-sm text-gray-600 mb-4 pb-4 border-b border-gray-200">
@@ -188,10 +137,51 @@
                                 </div>
                             </div>
                         </div>
-                    `;
-                    resultsContainer.appendChild(card);
+                    </div>
+                `;
+                // Use recipe Title as the key to store its HTML
+                recipeCardCache.set(recipe.Title, cardHTML);
+            });
+        }
+        
+        /**
+         * Parses a CSV string into an array of objects.
+         */
+        function parseCSV(text) {
+            const lines = text.trim().split(/\r?\n/);
+            const headers = lines[0].split(',').map(header => header.trim().replace(/"/g, ''));
+            headers[0] = headers[0].replace(/^\uFEFF/, '');
+            const data = [];
+            const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i]) continue;
+                const values = lines[i].split(regex);
+                const entry = {};
+                headers.forEach((header, index) => {
+                    let value = (values[index] || '').trim().replace(/^"|"$/g, '').replace(/""/g, '"');
+                    entry[header] = value;
                 });
+                data.push(entry);
+            }
+            return data;
+        }
+
+        /**
+         * Renders recipe results by pulling HTML from the cache.
+         * @param {Array<Object>} results The array of recipes to display.
+         */
+        function displayResults(results) {
+            if (results.length > 0) {
+                // Map the results to their cached HTML strings and join them
+                const resultsHTML = results
+                    .map(recipe => recipeCardCache.get(recipe.Title))
+                    .join('');
+
+                resultsContainer.innerHTML = resultsHTML; // Single DOM update
+                resultsCount.textContent = `Showing ${results.length} recipe(s).`;
+                noResultsMessage.classList.add('hidden');
             } else {
+                resultsContainer.innerHTML = ''; // Clear previous results
                 resultsCount.textContent = 'Showing 0 recipes.';
                 noResultsMessage.classList.remove('hidden');
             }
@@ -199,7 +189,6 @@
 
         /**
          * Sets the search input value and triggers a search.
-         * @param {string} term The search term.
          */
         function searchByTerm(term) {
             searchInput.value = term;
@@ -208,7 +197,7 @@
         }
 
         /**
-         * Handles the search input event.
+         * Handles the search logic.
          */
         function handleSearch() {
             const query = searchInput.value.toLowerCase().trim();
@@ -223,16 +212,16 @@
             displayResults(filteredRecipes);
         }
 
-        // Event listener for the search input
+        // Event listeners
         searchButton.addEventListener('click', handleSearch);
         searchInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
-                event.preventDefault(); // Prevents potential form submission
+                event.preventDefault();
                 handleSearch();
             }
         });
 
-        // Initial fetch of recipes when the page loads
+        // Initial fetch of recipes
         document.addEventListener('DOMContentLoaded', fetchRecipes);
     </script>
 </body>
