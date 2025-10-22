@@ -63,6 +63,11 @@
             <p class="text-xl">No recipes found.</p>
             <p>Try searching for something else!</p>
         </div>
+        <div id="paginationControls" class="flex justify-center items-center space-x-4 mb-6 hidden mt-6">
+            <button id="prevPage" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+            <span id="pageInfo" class="text-gray-700">Page 1 of 1</span>
+            <button id="nextPage" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+        </div>
     </div>
 
     <script>
@@ -72,11 +77,17 @@
         const resultsCount = document.getElementById('resultsCount');
         const loadingIndicator = document.getElementById('loading');
         const noResultsMessage = document.getElementById('noResults');
+        const paginationControls = document.getElementById('paginationControls');
+        const prevPageButton = document.getElementById('prevPage');
+        const nextPageButton = document.getElementById('nextPage');
+        const pageInfoSpan = document.getElementById('pageInfo');
 
         const sheetId = '1F-ffWA3lrISpJaCIPVnMB8y5QMObh3A79VoWGS3FEV0';
         const gid = '452204776';
         const googleSheetURL = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 
+        let currentPage = 1;
+        const recipesPerPage = 50;
         const recipeCardCache = new Map(); // Cache for HTML strings, keyed by searchable string
         let searchableRecipes = []; // Array of all searchable text strings
 
@@ -94,7 +105,8 @@
                 buildRecipeCaches(parsedRecipes);
                 
                 // Display initial results using the array of searchable strings
-                displayResults(searchableRecipes);
+                currentPage = 1; // Ensure initial page is 1
+                displayResults(searchableRecipes); // Pass the full list
             } catch (error) {
                 console.error('Error fetching recipes:', error);
                 resultsContainer.innerHTML = '<p class="text-center text-red-500">Could not load recipe data.</p>';
@@ -184,30 +196,57 @@
         /**
          * Renders recipe results by pulling HTML from the cache.
          * @param {Array<string>} resultsSearchStrings The array of searchable recipe strings to display.
+         * This function now takes the *entire* filtered list and handles pagination internally.
          */
-        function displayResults(resultsSearchStrings) {
-            if (resultsSearchStrings.length > 0) {
-                const resultsHTML = resultsSearchStrings
+        let currentFilteredRecipes = []; // Store the full filtered list for pagination
+
+        function displayResults(allFilteredSearchStrings) {
+            currentFilteredRecipes = allFilteredSearchStrings;
+            const totalRecipes = currentFilteredRecipes.length;
+            const totalPages = Math.ceil(totalRecipes / recipesPerPage);
+
+            const startIndex = (currentPage - 1) * recipesPerPage;
+            const endIndex = Math.min(startIndex + recipesPerPage, totalRecipes);
+
+            const recipesToDisplay = currentFilteredRecipes.slice(startIndex, endIndex);
+
+            if (recipesToDisplay.length > 0) {
+                const resultsHTML = recipesToDisplay
                     .map(searchString => recipeCardCache.get(searchString))
                     .join('');
 
                 resultsContainer.innerHTML = resultsHTML;
-                resultsCount.textContent = `Showing ${resultsSearchStrings.length} recipe(s).`;
+                resultsCount.textContent = `Showing ${startIndex + 1}-${endIndex} of ${totalRecipes} recipe(s).`;
                 noResultsMessage.classList.add('hidden');
             } else {
                 resultsContainer.innerHTML = '';
                 resultsCount.textContent = 'Showing 0 recipes.';
                 noResultsMessage.classList.remove('hidden');
             }
+            updatePaginationControls(totalRecipes, totalPages);
         }
 
+        function updatePaginationControls(totalRecipes, totalPages) {
+            if (totalRecipes === 0 || totalPages <= 1) {
+                paginationControls.classList.add('hidden');
+                return;
+            } else {
+                paginationControls.classList.remove('hidden');
+            }
+            
+            pageInfoSpan.textContent = `Page ${currentPage} of ${totalPages}`;
+            prevPageButton.disabled = currentPage === 1;
+            nextPageButton.disabled = currentPage === totalPages;
+        }
         /**
          * Sets the search input value and triggers a search.
          */
+
         function searchByTerm(term) {
             searchInput.value = term;
             handleSearch();
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            currentPage = 1; // Reset page when searching by term
         }
 
         /**
@@ -215,20 +254,38 @@
          */
         function handleSearch() {
             const query = searchInput.value.toLowerCase().trim();
-
-            if (query === "") {
-                displayResults(searchableRecipes);
-                return;
-            }
+            currentPage = 1; // Reset page on new search
             
-            const filteredSearchStrings = searchableRecipes.filter(searchString => {
-                return searchString.includes(query);
-            });
+            let filteredSearchStrings;
+            if (query === "") {
+                filteredSearchStrings = searchableRecipes;
+            } else {
+                filteredSearchStrings = searchableRecipes.filter(searchString => {
+                    return searchString.includes(query);
+                });
+            }
             displayResults(filteredSearchStrings);
         }
 
         // Event listeners
         searchButton.addEventListener('click', handleSearch);
+
+        prevPageButton.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayResults(currentFilteredRecipes);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+
+        nextPageButton.addEventListener('click', () => {
+            const totalPages = Math.ceil(currentFilteredRecipes.length / recipesPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayResults(currentFilteredRecipes);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
         searchInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
@@ -241,4 +298,3 @@
     </script>
 </body>
 </html>
-
